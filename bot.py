@@ -5,6 +5,7 @@ import telebot
 from supabase import create_client, Client
 import g4f
 import requests
+import time
 
 # إعداد السجلات لمراقبة الأداء
 logging.basicConfig(level=logging.INFO)
@@ -98,8 +99,7 @@ def process_order_tracking(message, order_id):
     bot.send_message(user_id, f"جاري البحث عن الطلب رقم (#{order_id})...")
     
     try:
-        # تم تعديل الاستعلام ليستخدم id بدلاً من order_number بناءً على سجلات الخطأ السابقة
-        # إذا كان اسم العمود في قاعدة بياناتك هو id، فالتعديل أدناه سيحل المشكلة
+        # محاولة البحث في عمود id أولاً كما اقترحت السجلات السابقة
         query = supabase.table('orders').select("*").eq('id', order_id).execute()
         
         if query.data and len(query.data) > 0:
@@ -107,7 +107,7 @@ def process_order_tracking(message, order_id):
             status = order_data.get('status', 'تحت المعالجة')
             bot.send_message(user_id, f"أستاذي، طلبك رقم (#{order_id}) حالته الحالية هي: {status}.")
         else:
-            # محاولة أخيرة بالبحث في عمود order_number إذا كان التعديل أعلاه لم يصب الهدف
+            # محاولة البحث في عمود order_number كخيار بديل
             try:
                 query_alt = supabase.table('orders').select("*").eq('order_number', order_id).execute()
                 if query_alt.data and len(query_alt.data) > 0:
@@ -126,8 +126,19 @@ def process_order_tracking(message, order_id):
 
 if __name__ == '__main__':
     logging.info("البوت يعمل الآن بنظام VANTOR المحدث...")
-    # استخدام skip_pending لتجاهل الرسائل القديمة التي أرسلت والبوت مطفأ
-    try:
-        bot.infinity_polling(skip_pending=True)
-    except Exception as e:
-        logging.error(f"Polling Error: {e}")
+    
+    # حل مشكلة Conflict 409 بشكل نهائي:
+    # 1. حذف أي ويب هوك قديم قد يكون مفعلاً
+    bot.remove_webhook()
+    time.sleep(1) # وقت مستقطع للتأكد من استجابة السيرفر
+    
+    # 2. تشغيل البوت مع آلية إعادة المحاولة عند حدوث خطأ في الاتصال
+    while True:
+        try:
+            logging.info("بدء عملية Polling...")
+            bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            logging.error(f"Polling Error: {e}")
+            # إذا حدث الخطأ 409، ننتظر قليلاً ثم نعيد المحاولة
+            time.sleep(5)
+            continue
