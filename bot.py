@@ -4,34 +4,41 @@ import time
 import logging
 import g4f
 
-# إعداد السجلات
+# إعداد السجلات لمراقبة أداء البوت في Railway
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# جلب التوكن
+# جلب توكن التليجرام من الـ Secrets في Railway
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 if not BOT_TOKEN:
-    logger.error("خطأ: BOT_TOKEN غير موجود في الإعدادات!")
+    logger.error("خطأ: لم يتم العثور على BOT_TOKEN في المتغيرات السرية!")
     exit(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# --- محرك الذكاء الاصطناعي الذكي والمستقر ---
+# --- محرك الذكاء الاصطناعي بالشخصية العراقية ---
 
 def get_ai_response(user_message):
     """
-    جلب رد ذكي باستخدام أفضل الموديلات المتاحة تلقائياً لتجنب أخطاء المسميات.
+    جلب رد ذكي باللهجة العراقية الكاملة باستخدام g4f.
     """
     try:
-        # استخدام التحديد التلقائي للموديل لضمان العمل مهما تغيرت إصدارات المكتبة
+        # صياغة التعليمات لجعل الرد عراقي 100%
+        system_instruction = (
+            "أنت مساعد ذكي واسمك VANTOR. أريدك أن تتحدث اللهجة العراقية العامية "
+            "بشكل كامل وطبيعي جداً. استخدم كلمات مثل (هلو، عيني، اغاتي، شلونه، شكو ماكو، تدلل، "
+            "خادم ربك، صار، من عيوني). "
+            "أجب على كل الأسئلة بذكاء ومنطق لكن بلسان عراقي فصيح ومحبب."
+        )
+
         response = g4f.ChatCompletion.create(
-            model=g4f.models.default, # اختيار الموديل الافتراضي المستقر تلقائياً
+            model=g4f.models.default,
             messages=[
-                {"role": "system", "content": "أنت VANTOR، مساعد ذكي جداً وقادر على الإجابة على كل الأسئلة بذكاء ومنطق باللغة العربية."},
+                {"role": "system", "content": system_instruction},
                 {"role": "user", "content": user_message}
             ],
         )
@@ -39,61 +46,58 @@ def get_ai_response(user_message):
         if response and len(str(response)) > 0:
             return response
         else:
-            return "أنا أفكر بعمق حالياً، هل يمكنك إعادة صياغة سؤالك؟"
+            return "والله يا غالي صار عندي فصل بالدماغ، تعيد سؤالك فدوة لعينك؟"
             
     except Exception as e:
         logger.error(f"AI Error: {e}")
-        return "أعتذر، حدث ضغط بسيط في معالجة البيانات. أنا معك الآن، ماذا تريد أن تسأل؟"
+        return "آسف عيوني، صار عندي لود بالشبكة. ثواني وارجعلك!"
 
 # --- معالجة الرسائل ---
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    welcome_text = "مرحباً! أنا VANTOR الذكي. كيف يمكنني مساعدتك اليوم؟"
+    """ترحيب عراقي حار"""
+    welcome_text = (
+        "هلو عيني! أهلاً وسهلاً بيك. "
+        "أنا VANTOR، وبخدمتك بأي وقت. اسألني شكو ببالك وتدلل!"
+    )
     bot.reply_to(message, welcome_text)
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
+    """استلام الرسائل والرد عليها بالعراقي"""
     chat_id = message.chat.id
     user_text = message.text
 
-    # إظهار حالة الكتابة
+    # إظهار حالة "typing" لتعزيز التفاعل
     bot.send_chat_action(chat_id, 'typing')
     
     logger.info(f"رسالة من {chat_id}: {user_text}")
 
-    # جلب الرد من الذكاء الاصطناعي
-    reply = get_ai_response(user_text)
+    # جلب الرد الذكي العراقي
+    final_reply = get_ai_response(user_text)
 
     try:
-        bot.send_message(chat_id, reply)
-        logger.info(f"تم الرد بنجاح على: {chat_id}")
+        bot.send_message(chat_id, final_reply)
+        logger.info(f"تم الرد باللهجة العراقية على {chat_id}")
     except Exception as e:
-        logger.error(f"فشل الإرسال: {e}")
+        logger.error(f"فشل إرسال الرسالة: {e}")
 
-# --- آلية التشغيل ومنع التعارض ---
+# --- آلية التشغيل ومنع التعارض المستقر ---
 
-def run_bot():
-    """
-    تشغيل البوت مع محاولة تنظيف الاتصالات القديمة لمنع خطأ 409 Conflict.
-    """
+def start_bot():
+    """تشغيل البوت مع ضمان استقرار الجلسة"""
     while True:
         try:
-            logger.info("محاولة بدء تشغيل البوت ومنع التعارض...")
-            # إزالة الويب هوك والاتصالات السابقة
+            logger.info("جاري تشغيل VANTOR العراقي...")
             bot.remove_webhook()
-            time.sleep(1) 
-            
-            # البدء باستقبال الرسائل
-            bot.polling(none_stop=True, interval=2, timeout=40)
-            
+            # تقليل الفاصل الزمني قليلاً لسرعة الرد
+            bot.polling(none_stop=True, interval=1, timeout=60)
         except Exception as e:
-            if "Conflict" in str(e):
-                logger.warning("يوجد تعارض: نسخة أخرى تعمل. سأحاول إيقافها والبدء مجدداً...")
-                time.sleep(10) # انتظار أطول لكي يقوم التليجرام بإغلاق الجلسة القديمة
-            else:
-                logger.error(f"خطأ غير متوقع: {e}")
-                time.sleep(5)
+            logger.error(f"حدث خطأ: {e}")
+            # إذا كان هناك تعارض، ننتظر قليلاً قبل إعادة التشغيل
+            time.sleep(10)
 
 if __name__ == "__main__":
-    run_bot()
+    # تشغيل الملف بالكامل بدون اختصار
+    start_bot()
