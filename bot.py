@@ -11,7 +11,7 @@ import time
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# بيانات الاعتماد (تأكد من ضبطها في متغيرات البيئة ببيئة التشغيل)
+# بيانات الاعتماد (تأكد من ضبطها في متغيرات البيئة)
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
@@ -29,77 +29,84 @@ except Exception as e:
 user_states = {}
 
 def get_ai_response(prompt):
-    """وظيفة لاستخدام g4f للرد على الرسائل العامة بطريقة مرنة لتجنب أخطاء الاستيراد"""
+    """وظيفة جلب رد الذكاء الاصطناعي باللهجة العراقية وتجنب تحليل الألوان"""
     try:
-        # نستخدم الكود المباشر دون استيراد Providers لتفادي ImportError
+        # تعليمات صارمة للبوت ليتحدث عراقي ويبتعد عن الألوان
+        system_instruction = (
+            "أنت مساعد ذكي لبوت شركة VANTOR للتجارة والشحن. "
+            "تحدث بلهجة عراقية بغدادية محترمة ولطيفة جداً. "
+            "ممنوع تحلل أرقام الهكس (Hex Codes) كألوان إلا إذا سألك المستخدم صراحة عن لون. "
+            "إذا أرسل المستخدم رقماً، اعتبره رقم طلب أو استفسار عام. "
+            "استخدم كلمات مثل: 'تدلل'، 'عيوني'، 'أبشر'، 'من رخصتك'، 'غالي والطلب رخيص'."
+        )
+        
         response = g4f.ChatCompletion.create(
             model=g4f.models.default,
             messages=[
-                {"role": "system", "content": "أنت مساعد ذكي لبوت VANTOR. أجب بلهجة محترمة ولباقة."},
+                {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt}
             ],
         )
         if response and len(str(response)) > 0:
             return response
-        return "أهلاً بك أستاذي، أنا معك، كيف يمكنني خدمتك؟"
+        return "يا هلا بيك عيوني، أنا معك، كلي بشنو أكدر أخدمك اليوم؟"
     except Exception as e:
         logger.error(f"AI Error: {e}")
-        return "أهلاً بك أستاذي، أنا معك، كيف يمكنني خدمتك؟"
+        return "أهلاً بك أستاذي العزيز، أنا موجود، شلون أكدر أساعدك بخصوص طلبك؟"
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
     user_id = message.chat.id
-    user_states[user_id] = None # إعادة ضبط الحالة
+    user_states[user_id] = None 
     welcome_text = (
-        f"أهلاً بك أستاذ {message.from_user.first_name} في نظام VANTOR المحدث.\n"
-        "يمكنك الاستفسار عن حالة طلبك بإرسال كلمة 'تتبع' أو 'طلب' أو أي سؤال آخر."
+        f"يا هلا ومية هلا بيك أستاذ {message.from_user.first_name} بنظام VANTOR.\n\n"
+        "أنا مساعدك الذكي، تكدر تستفسر عن طلبك بس أرسل كلمة 'تتبع' أو 'وين وصلي'، "
+        "أو إذا عندك أي سؤال ثاني أنا حاضر وأجاوبك عيوني."
     )
     bot.send_message(user_id, welcome_text)
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
     user_id = message.chat.id
-    text = message.text.strip().lower()
+    text = message.text.strip()
 
-    # كلمات التحية والردود السريعة
-    greetings = ['سلام', 'هلا', 'مرحبا', 'السلام', 'شلونك', 'صباح', 'مساء', 'هلو', 'الو']
+    # كلمات التحية العراقية
+    greetings = [
+        'سلام', 'هلا', 'مرحبا', 'شلونك', 'شلونج', 'هلو', 'الو', 
+        'كوة', 'صباح الخير', 'مساء الخير', 'يا هلا', 'شخباركم'
+    ]
 
-    # 1. إذا كان البوت ينتظر رقم طلب
-    if user_states.get(user_id) == 'waiting_for_order':
-        # البحث عن أي أرقام في الرسالة
+    # 1. إذا كان البوت ينتظر رقم طلب أو المستخدم أرسل رقم يبدأ بـ #
+    if user_states.get(user_id) == 'waiting_for_order' or text.startswith('#'):
+        # استخراج الرقم فقط
         order_id_match = re.search(r'\d+', text)
         if order_id_match:
             order_id = order_id_match.group()
-            user_states[user_id] = None # إنهاء الحالة
+            user_states[user_id] = None 
             process_order_tracking(message, order_id)
             return
-        else:
-            if any(word in text for word in greetings):
-                user_states[user_id] = None
-                ai_reply = get_ai_response(message.text)
-                bot.send_message(user_id, ai_reply)
-            else:
-                bot.send_message(user_id, "من فضلك أرسل رقم الطلب فقط (أرقام) لكي أتمكن من مساعدتك.")
-            return
 
-    # 2. الكشف عن نية تتبع الطلب
-    tracking_keywords = ['تتبع', 'وين', 'وصل', 'طلبي', 'اين', 'الطلب', 'وين صار', 'حالة']
-    if any(word in text for word in tracking_keywords):
+    # 2. الكشف عن نية تتبع الطلب (بالعراقي)
+    tracking_keywords = [
+        'تتبع', 'وين', 'وصل', 'طلبي', 'اين', 'الطلب', 
+        'وين صار', 'حالة', 'شصار', 'شوكت'
+    ]
+    if any(word in text.lower() for word in tracking_keywords):
         user_states[user_id] = 'waiting_for_order'
-        bot.send_message(user_id, "أبشر، زودني برقم الطلب الخاص بك لأتحقق من حالته:")
+        bot.send_message(user_id, "من رخصتك عيوني، زودني برقم الطلب مالتك (مثلاً #123) حتى أشوفلك وين صار:")
         return
 
-    # 3. الرد العام باستخدام الذكاء الاصطناعي
-    ai_reply = get_ai_response(message.text)
+    # 3. الرد العام باستخدام الذكاء الاصطناعي (باللهجة العراقية)
+    ai_reply = get_ai_response(text)
     bot.send_message(user_id, ai_reply)
 
 def process_order_tracking(message, order_id):
-    """البحث في قاعدة بيانات Supabase مع تجربة عدة أعمدة محتملة"""
+    """البحث في قاعدة بيانات Supabase ورد النتيجة بالعراقي"""
     user_id = message.chat.id
-    bot.send_message(user_id, f"جاري البحث عن الطلب رقم (#{order_id})...")
+    bot.send_message(user_id, f"تدلل عيوني، جاري البحث عن الطلب رقم (#{order_id})...")
     
     found = False
-    # تجربة الأسماء الشائعة للأعمدة لضمان عدم حدوث خطأ
+    # تجربة الأعمدة المحتملة لرقم الطلب
     potential_columns = ['id', 'order_number', 'order_id']
     
     for col in potential_columns:
@@ -107,31 +114,40 @@ def process_order_tracking(message, order_id):
             query = supabase.table('orders').select("*").eq(col, order_id).execute()
             if query.data and len(query.data) > 0:
                 order_data = query.data[0]
-                status = order_data.get('status', 'تحت المعالجة')
-                bot.send_message(user_id, f"أستاذي، طلبك رقم (#{order_id}) حالته الحالية هي: {status}.")
+                # جلب الحالة وترجمتها للعراقي
+                status = order_data.get('status', 'قيد المعالجة')
+                
+                status_translations = {
+                    'pending': 'بعده قيد الانتظار، إن شاء الله قريباً يتحرك.',
+                    'processing': 'جاري تجهيز طلبك هسة بالمخازن.',
+                    'shipped': 'أبشر، طلبك حالياً بالطريق إلك.',
+                    'delivered': 'تم التسليم بنجاح، بالعافية عليك عيوني.',
+                    'cancelled': 'للأسف الطلب ملغي، تواصل مع الدعم للمزيد من التفاصيل.'
+                }
+                
+                status_msg = status_translations.get(status.lower(), f"حالته الحالية هي: {status}")
+                
+                bot.send_message(user_id, f"أستاذي العزيز، لكيتلك الطلب رقم (#{order_id})، و {status_msg}")
                 found = True
                 break
-        except Exception:
+        except Exception as e:
+            logger.error(f"Database error on column {col}: {e}")
             continue
             
     if not found:
-        bot.send_message(user_id, f"عذراً، لم أجد طلباً مسجلاً بالرقم (#{order_id}). تأكد من الرقم مرة أخرى.")
+        bot.send_message(user_id, f"والله يا عيوني بحثت بس ما لكيت طلب بهذا الرقم (#{order_id})، تأكد من الرقم يرحم والديك.")
 
 if __name__ == '__main__':
-    logger.info("جاري بدء تشغيل بوت VANTOR...")
+    logger.info("البوت يعمل الآن بالهوية العراقية لشركة VANTOR...")
     
-    # حل مشكلة الـ Conflict 409 وحذف أي ويب هوك قديم
     try:
         bot.remove_webhook()
-        logger.info("تم تنظيف جلسات الاتصال القديمة.")
-    except Exception as e:
-        logger.warning(f"فشل حذف الويب هوك (قد لا يكون موجوداً أصلاً): {e}")
+    except:
+        pass
         
-    # حلقة تشغيل دائمة لضمان عدم توقف البوت عند حدوث أخطاء شبكة
     while True:
         try:
-            logger.info("البوت بدأ باستقبال الرسائل...")
-            bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
+            bot.infinity_polling(skip_pending=True, timeout=90)
         except Exception as e:
             logger.error(f"Polling Error: {e}")
-            time.sleep(10) # انتظار قليلاً قبل إعادة المحاولة
+            time.sleep(10)
