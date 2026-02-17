@@ -29,15 +29,16 @@ except Exception as e:
 user_states = {}
 
 def get_ai_response(prompt):
-    """وظيفة جلب رد الذكاء الاصطناعي باللهجة العراقية وتجنب تحليل الألوان"""
+    """وظيفة جلب رد الذكاء الاصطناعي باللهجة العراقية مع قيود صارمة"""
     try:
-        # تعليمات صارمة للبوت ليتحدث عراقي ويبتعد عن الألوان
+        # تعليمات صارمة جداً لعدم الخروج عن سياق الشركة
         system_instruction = (
-            "أنت مساعد ذكي لبوت شركة VANTOR للتجارة والشحن. "
-            "تحدث بلهجة عراقية بغدادية محترمة ولطيفة جداً. "
-            "ممنوع تحلل أرقام الهكس (Hex Codes) كألوان إلا إذا سألك المستخدم صراحة عن لون. "
-            "إذا أرسل المستخدم رقماً، اعتبره رقم طلب أو استفسار عام. "
-            "استخدم كلمات مثل: 'تدلل'، 'عيوني'، 'أبشر'، 'من رخصتك'، 'غالي والطلب رخيص'."
+            "أنت مساعد ذكي ومحترم لبوت شركة VANTOR للتجارة والشحن في العراق. "
+            "تحدث بلهجة عراقية بغدادية مهذبة جداً. "
+            "مهمتك هي الإجابة على استفسارات الزبائن العامة بحدود عمل الشركة فقط. "
+            "إذا أرسل المستخدم رقماً، لا تحلله كألوان أو معلومات عامة من الإنترنت. "
+            "إذا سألك عن شيء خارج نطاق التجارة والشحن، أجب بلباقة أنك متخصص بمساعدة زبائن VANTOR فقط. "
+            "استخدم كلمات: عيوني، تدلل، أبشر، عيني، أغاتي."
         )
         
         response = g4f.ChatCompletion.create(
@@ -49,10 +50,10 @@ def get_ai_response(prompt):
         )
         if response and len(str(response)) > 0:
             return response
-        return "يا هلا بيك عيوني، أنا معك، كلي بشنو أكدر أخدمك اليوم؟"
+        return "يا هلا بيك عيوني، بشنو أكدر أخدمك بخصوص شغلك وية VANTOR؟"
     except Exception as e:
         logger.error(f"AI Error: {e}")
-        return "أهلاً بك أستاذي العزيز، أنا موجود، شلون أكدر أساعدك بخصوص طلبك؟"
+        return "أهلاً بيك غالي، أنا معك، شلون أكدر أساعدك بخصوص طلباتك؟"
 
 @bot.message_handler(commands=['start', 'help'])
 def send_welcome(message):
@@ -61,7 +62,7 @@ def send_welcome(message):
     welcome_text = (
         f"يا هلا ومية هلا بيك أستاذ {message.from_user.first_name} بنظام VANTOR.\n\n"
         "أنا مساعدك الذكي، تكدر تستفسر عن طلبك بس أرسل كلمة 'تتبع' أو 'وين وصلي'، "
-        "أو إذا عندك أي سؤال ثاني أنا حاضر وأجاوبك عيوني."
+        "أو إذا عندك أي سؤال بخصوص خدماتنا أنا حاضر عيوني."
     )
     bot.send_message(user_id, welcome_text)
 
@@ -76,24 +77,22 @@ def handle_all_messages(message):
         'كوة', 'صباح الخير', 'مساء الخير', 'يا هلا', 'شخباركم'
     ]
 
-    # 1. إذا كان البوت ينتظر رقم طلب أو المستخدم أرسل رقم يبدأ بـ #
-    if user_states.get(user_id) == 'waiting_for_order' or text.startswith('#'):
-        # استخراج الرقم فقط
-        order_id_match = re.search(r'\d+', text)
-        if order_id_match:
-            order_id = order_id_match.group()
-            user_states[user_id] = None 
-            process_order_tracking(message, order_id)
-            return
+    # 1. التحقق إذا كانت الرسالة عبارة عن رقم فقط أو تبدأ بـ # (نعتبرها طلب فوراً)
+    order_id_match = re.fullmatch(r'#?\d+', text)
+    if order_id_match or user_states.get(user_id) == 'waiting_for_order':
+        order_id = re.search(r'\d+', text).group()
+        user_states[user_id] = None 
+        process_order_tracking(message, order_id)
+        return
 
     # 2. الكشف عن نية تتبع الطلب (بالعراقي)
     tracking_keywords = [
         'تتبع', 'وين', 'وصل', 'طلبي', 'اين', 'الطلب', 
-        'وين صار', 'حالة', 'شصار', 'شوكت'
+        'وين صار', 'حالة', 'شصار', 'شوكت', 'وين وصلت'
     ]
     if any(word in text.lower() for word in tracking_keywords):
         user_states[user_id] = 'waiting_for_order'
-        bot.send_message(user_id, "من رخصتك عيوني، زودني برقم الطلب مالتك (مثلاً #123) حتى أشوفلك وين صار:")
+        bot.send_message(user_id, "من رخصتك عيوني، زودني برقم الطلب مالتك حتى أشوفلك حالته بقاعدة البيانات:")
         return
 
     # 3. الرد العام باستخدام الذكاء الاصطناعي (باللهجة العراقية)
@@ -101,12 +100,11 @@ def handle_all_messages(message):
     bot.send_message(user_id, ai_reply)
 
 def process_order_tracking(message, order_id):
-    """البحث في قاعدة بيانات Supabase ورد النتيجة بالعراقي"""
+    """البحث في قاعدة بيانات Supabase مع منع الذكاء الاصطناعي من التدخل في النتائج"""
     user_id = message.chat.id
-    bot.send_message(user_id, f"تدلل عيوني، جاري البحث عن الطلب رقم (#{order_id})...")
+    bot.send_message(user_id, f"صار عيوني، جاري البحث عن الطلب رقم (#{order_id}) بسجلات VANTOR...")
     
     found = False
-    # تجربة الأعمدة المحتملة لرقم الطلب
     potential_columns = ['id', 'order_number', 'order_id']
     
     for col in potential_columns:
@@ -114,7 +112,6 @@ def process_order_tracking(message, order_id):
             query = supabase.table('orders').select("*").eq(col, order_id).execute()
             if query.data and len(query.data) > 0:
                 order_data = query.data[0]
-                # جلب الحالة وترجمتها للعراقي
                 status = order_data.get('status', 'قيد المعالجة')
                 
                 status_translations = {
@@ -122,23 +119,22 @@ def process_order_tracking(message, order_id):
                     'processing': 'جاري تجهيز طلبك هسة بالمخازن.',
                     'shipped': 'أبشر، طلبك حالياً بالطريق إلك.',
                     'delivered': 'تم التسليم بنجاح، بالعافية عليك عيوني.',
-                    'cancelled': 'للأسف الطلب ملغي، تواصل مع الدعم للمزيد من التفاصيل.'
+                    'cancelled': 'للأسف الطلب ملغي، تواصل وية الإدارة حتى تعرف السبب.'
                 }
                 
                 status_msg = status_translations.get(status.lower(), f"حالته الحالية هي: {status}")
-                
                 bot.send_message(user_id, f"أستاذي العزيز، لكيتلك الطلب رقم (#{order_id})، و {status_msg}")
                 found = True
                 break
         except Exception as e:
-            logger.error(f"Database error on column {col}: {e}")
             continue
             
     if not found:
-        bot.send_message(user_id, f"والله يا عيوني بحثت بس ما لكيت طلب بهذا الرقم (#{order_id})، تأكد من الرقم يرحم والديك.")
+        # هنا المهم: لا نرسل الرقم للذكاء الاصطناعي إذا فشل البحث في الداتابيز
+        bot.send_message(user_id, f"والله يا عيوني بحثت بكل السجلات وما لكيت طلب بهذا الرقم (#{order_id}). تأكد من الرقم يرحم والديك، أو خابر الدعم الفني.")
 
 if __name__ == '__main__':
-    logger.info("البوت يعمل الآن بالهوية العراقية لشركة VANTOR...")
+    logger.info("البوت يعمل الآن بالهوية العراقية الصارمة لشركة VANTOR...")
     
     try:
         bot.remove_webhook()
