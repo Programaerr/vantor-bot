@@ -2,104 +2,98 @@ import telebot
 import os
 import time
 import logging
-import g4f  # مكتبة توفر ذكاء اصطناعي مجاني
+import g4f
 
-# إعداد السجلات لمراقبة أداء البوت في Railway
+# إعداد السجلات
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# جلب توكن التليجرام من الـ Secrets في Railway
-# تأكد من تسمية المتغير BOT_TOKEN في إعدادات Variables في Railway
+# جلب التوكن
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 if not BOT_TOKEN:
-    logger.error("خطأ: لم يتم العثور على BOT_TOKEN في المتغيرات السرية!")
+    logger.error("خطأ: BOT_TOKEN غير موجود في الإعدادات!")
     exit(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# --- محرك الذكاء الاصطناعي المجاني المصحح ---
+# --- محرك الذكاء الاصطناعي الذكي والمستقر ---
 
 def get_ai_response(user_message):
     """
-    إرسال نص المستخدم إلى نماذج ذكاء اصطناعي مجانية.
-    تم تعديل طريقة استدعاء الموديل لتجنب أخطاء الإصدارات (AttributeError).
+    جلب رد ذكي باستخدام أفضل الموديلات المتاحة تلقائياً لتجنب أخطاء المسميات.
     """
     try:
-        # استخدام string للموديل بدلاً من الكائن المباشر لتجنب أخطاء السجلات
+        # استخدام التحديد التلقائي للموديل لضمان العمل مهما تغيرت إصدارات المكتبة
         response = g4f.ChatCompletion.create(
-            model="gpt-3.5-turbo", 
+            model=g4f.models.default, # اختيار الموديل الافتراضي المستقر تلقائياً
             messages=[
-                {"role": "system", "content": "أنت مساعد ذكي ومفيد يدعى VANTOR. أجب على كافة الأسئلة باللغة العربية الفصحى وبأسلوب ذكي ومنطقي."},
+                {"role": "system", "content": "أنت VANTOR، مساعد ذكي جداً وقادر على الإجابة على كل الأسئلة بذكاء ومنطق باللغة العربية."},
                 {"role": "user", "content": user_message}
             ],
         )
         
-        if response and len(response) > 0:
+        if response and len(str(response)) > 0:
             return response
         else:
-            return "عذراً، لم أستطع معالجة الرد حالياً. هل يمكنك المحاولة مرة أخرى؟"
+            return "أنا أفكر بعمق حالياً، هل يمكنك إعادة صياغة سؤالك؟"
             
     except Exception as e:
-        logger.error(f"خطأ في محرك الذكاء الاصطناعي: {e}")
-        # محاولة أخيرة باستخدام موديل افتراضي آخر في حال فشل الأول
-        try:
-            response = g4f.ChatCompletion.create(
-                model=g4f.models.default,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            return response
-        except:
-            return "أواجه ضغطاً في التفكير حالياً، سأكون معك خلال لحظات."
+        logger.error(f"AI Error: {e}")
+        return "أعتذر، حدث ضغط بسيط في معالجة البيانات. أنا معك الآن، ماذا تريد أن تسأل؟"
 
 # --- معالجة الرسائل ---
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    """ترحيب ذكي عند بداية التشغيل"""
-    welcome_text = (
-        "مرحباً بك! أنا VANTOR.\n"
-        "أنا الآن مدعوم بنظام ذكاء اصطناعي متكامل. اسألني أي سؤال وسأجيبك فوراً."
-    )
+    welcome_text = "مرحباً! أنا VANTOR الذكي. كيف يمكنني مساعدتك اليوم؟"
     bot.reply_to(message, welcome_text)
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
-    """استقبال الرسائل وتحويلها للمحرك الذكي"""
     chat_id = message.chat.id
     user_text = message.text
 
-    # إظهار حالة "يكتب الآن" في تليجرام
+    # إظهار حالة الكتابة
     bot.send_chat_action(chat_id, 'typing')
     
     logger.info(f"رسالة من {chat_id}: {user_text}")
 
-    # جلب الرد الذكي
-    final_reply = get_ai_response(user_text)
+    # جلب الرد من الذكاء الاصطناعي
+    reply = get_ai_response(user_text)
 
     try:
-        # إرسال الإجابة النهائية للمستخدم
-        bot.send_message(chat_id, final_reply)
-        logger.info(f"تم الرد على {chat_id} بنجاح.")
+        bot.send_message(chat_id, reply)
+        logger.info(f"تم الرد بنجاح على: {chat_id}")
     except Exception as e:
-        logger.error(f"فشل إرسال الرسالة: {e}")
+        logger.error(f"فشل الإرسال: {e}")
 
-# --- آلية التشغيل المستمر ---
+# --- آلية التشغيل ومنع التعارض ---
 
-def start_polling():
-    """تشغيل البوت بوضعية الاستقرار لضمان عدم التوقف"""
+def run_bot():
+    """
+    تشغيل البوت مع محاولة تنظيف الاتصالات القديمة لمنع خطأ 409 Conflict.
+    """
     while True:
         try:
-            logger.info("جاري تشغيل البوت الذكي (VANTOR)...")
+            logger.info("محاولة بدء تشغيل البوت ومنع التعارض...")
+            # إزالة الويب هوك والاتصالات السابقة
             bot.remove_webhook()
-            bot.polling(none_stop=True, interval=1, timeout=60)
+            time.sleep(1) 
+            
+            # البدء باستقبال الرسائل
+            bot.polling(none_stop=True, interval=2, timeout=40)
+            
         except Exception as e:
-            logger.error(f"خطأ في الاتصال: {e}")
-            time.sleep(5)
+            if "Conflict" in str(e):
+                logger.warning("يوجد تعارض: نسخة أخرى تعمل. سأحاول إيقافها والبدء مجدداً...")
+                time.sleep(10) # انتظار أطول لكي يقوم التليجرام بإغلاق الجلسة القديمة
+            else:
+                logger.error(f"خطأ غير متوقع: {e}")
+                time.sleep(5)
 
 if __name__ == "__main__":
-    # تشغيل الكود بالكامل
-    start_polling()
+    run_bot()
