@@ -30,16 +30,18 @@ user_states = {}
 def get_ai_response(prompt):
     """وظيفة لاستخدام g4f للرد على الرسائل العامة"""
     try:
+        # قمنا بتحديد الموديل واستخدام مزودين افتراضيين لضمان المجانية والاستقرار
         response = g4f.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+            model=g4f.models.gpt_35_turbo,
             messages=[{"role": "user", "content": prompt}],
         )
         # التأكد من أن الرد ليس فارغاً
-        if response:
+        if response and len(str(response)) > 0:
             return response
-        return "تفضل أستاذي، كيف يمكنني مساعدتك؟"
+        return "أهلاً بك أستاذي، أنا معك، كيف يمكنني خدمتك؟"
     except Exception as e:
         logging.error(f"AI Error: {e}")
+        # رد احتياطي في حال فشل الاتصال بالمزودين المجانيين
         return "أهلاً بك أستاذي، أنا معك، كيف يمكنني خدمتك؟"
 
 @bot.message_handler(commands=['start', 'help'])
@@ -96,14 +98,26 @@ def process_order_tracking(message, order_id):
     bot.send_message(user_id, f"جاري البحث عن الطلب رقم (#{order_id})...")
     
     try:
-        # البحث في الجدول
-        query = supabase.table('orders').select("*").eq('order_number', order_id).execute()
+        # تم تعديل الاستعلام ليستخدم id بدلاً من order_number بناءً على سجلات الخطأ السابقة
+        # إذا كان اسم العمود في قاعدة بياناتك هو id، فالتعديل أدناه سيحل المشكلة
+        query = supabase.table('orders').select("*").eq('id', order_id).execute()
         
         if query.data and len(query.data) > 0:
             order_data = query.data[0]
             status = order_data.get('status', 'تحت المعالجة')
             bot.send_message(user_id, f"أستاذي، طلبك رقم (#{order_id}) حالته الحالية هي: {status}.")
         else:
+            # محاولة أخيرة بالبحث في عمود order_number إذا كان التعديل أعلاه لم يصب الهدف
+            try:
+                query_alt = supabase.table('orders').select("*").eq('order_number', order_id).execute()
+                if query_alt.data and len(query_alt.data) > 0:
+                    order_data = query_alt.data[0]
+                    status = order_data.get('status', 'تحت المعالجة')
+                    bot.send_message(user_id, f"أستاذي، طلبك رقم (#{order_id}) حالته الحالية هي: {status}.")
+                    return
+            except:
+                pass
+                
             bot.send_message(user_id, f"عذراً، لم أجد طلب مسجل بالرقم (#{order_id}). تأكد من الرقم مرة أخرى.")
             
     except Exception as e:
@@ -113,4 +127,7 @@ def process_order_tracking(message, order_id):
 if __name__ == '__main__':
     logging.info("البوت يعمل الآن بنظام VANTOR المحدث...")
     # استخدام skip_pending لتجاهل الرسائل القديمة التي أرسلت والبوت مطفأ
-    bot.infinity_polling(skip_pending=True)
+    try:
+        bot.infinity_polling(skip_pending=True)
+    except Exception as e:
+        logging.error(f"Polling Error: {e}")
