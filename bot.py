@@ -1,56 +1,75 @@
-import os
 import telebot
-from dotenv import load_dotenv
-from huggingface_hub import InferenceClient
+import os
+import time
+import logging
 
-# تحميل المتغيرات
-load_dotenv()
+# إعداد نظام السجلات لمراقبة أداء البوت في Railway
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-HF_TOKEN = os.getenv("HF_TOKEN")
+# جلب التوكن من المتغيرات البيئية (Secrets) في Railway
+# تأكد من إضافة متغير باسم BOT_TOKEN في قسم Variables في Railway
+BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-bot = telebot.TeleBot(TOKEN, threaded=False)
+# التحقق من وجود التوكن قبل البدء
+if not BOT_TOKEN:
+    logger.error("خطأ: لم يتم العثور على BOT_TOKEN في متغيرات البيئة (Secrets)!")
+    exit(1)
 
-# استخدام موديل موثوق
-client = InferenceClient("mistralai/Mistral-7B-Instruct-v0.2", token=HF_TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN)
 
-def get_ai_reply(user_text):
-    try:
-        # بناء البرومبت
-        system_msg = "أنت عبود، مساعد ذكي من العراق. تجيب باللهجة العراقية الودودة."
-        prompt = f"<s>[INST] {system_msg} \n {user_text} [/INST]"
-        
-        output = client.text_generation(
-            prompt,
-            max_new_tokens=250,
-            temperature=0.7
-        )
-        return output.strip()
-    
-    except Exception as e:
-        error_str = str(e)
-        if "401" in error_str:
-            return "يا خوي التوكن (Token) مال هجنج فيس غير صحيح أو مو مفعل. تأكد منه بـ Railway."
-        elif "429" in error_str:
-            return "يا خوي السيرفر عليه ضغط حالياً، اصبر ثواني وارجع."
-        else:
-            print(f"Detailed Error: {e}")
-            return "صار عندي خلل تقني، جاي أحاول أصلحه."
+# --- منطقة منطق الردود (Logic) ---
+# هنا يمكنك تعديل الردود لضمان إعطاء إجابة صحيحة
 
 @bot.message_handler(commands=['start'])
-def welcome(message):
-    bot.reply_to(message, "هلا بيك! أنا عبود. شلون أقدر أساعدك اليوم؟")
+def send_welcome(message):
+    """الرد على أمر التشغيل"""
+    logger.info(f"أمر /start من المستخدم: {message.chat.id}")
+    bot.reply_to(message, "أهلاً بك! البوت يعمل الآن باستخدام Secrets منصة Railway بنجاح.")
 
 @bot.message_handler(func=lambda message: True)
-def handle_messages(message):
-    chat_id = message.chat.id
+def handle_all_messages(message):
+    """
+    هنا يتم استقبال ومعالجة كل الرسائل.
+    تأكد من كتابة المنطق الذي تريده هنا ليكون الرد صحيحاً.
+    """
     try:
-        bot.send_chat_action(chat_id, 'typing')
-        reply = get_ai_reply(message.text)
-        bot.send_message(chat_id, reply)
+        user_input = message.text
+        logger.info(f"رسالة جديدة: {user_input}")
+
+        # مثال لمنطق رد (قم بتغييره حسب حاجتك):
+        # إذا كنت تريد ردوداً محددة بناءً على نص معين
+        if "مرحبا" in user_input:
+            response = "أهلاً وسهلاً بك!"
+        else:
+            # هنا تضع الرد الافتراضي أو منطق المعالجة
+            response = f"لقد استلمت رسالتك وهي: {user_input}"
+
+        bot.send_message(message.chat.id, response)
+        logger.info(f"تم إرسال الرد بنجاح")
+
     except Exception as e:
-        bot.send_message(chat_id, "اعتذر منك، جرب ترسل الرسالة مرة ثانية.")
+        logger.error(f"حدث خطأ أثناء معالجة الرسالة: {e}")
+
+# --- آلية التشغيل المستقر في بيئة Railway ---
+
+def run_bot():
+    """تشغيل البوت مع معالجة الأخطاء الشائعة في الاستضافة"""
+    while True:
+        try:
+            logger.info("جاري بدء تشغيل البوت (Polling)...")
+            # حذف أي ويب هوك قديم لضمان عدم حدوث Conflict
+            bot.remove_webhook()
+            # تشغيل البوت
+            bot.polling(none_stop=True, interval=0, timeout=40)
+        except Exception as e:
+            logger.error(f"خطأ في الاتصال أو التعارض: {e}")
+            # الانتظار قبل إعادة المحاولة لتجنب الحظر أو تكرار الأخطاء
+            time.sleep(10)
 
 if __name__ == "__main__":
-    print("🚀 Abood is booting up...")
-    bot.infinity_polling()
+    # كتابة الملف كاملاً دون اختصارات لضمان التشغيل الصحيح
+    run_bot()
