@@ -12,7 +12,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # جلب توكن التليجرام من الـ Secrets في Railway
-# تأكد من تسمية المتغير BOT_TOKEN في إعدادات Railway
+# تأكد من تسمية المتغير BOT_TOKEN في إعدادات Variables في Railway
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 if not BOT_TOKEN:
@@ -21,31 +21,39 @@ if not BOT_TOKEN:
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# --- محرك الذكاء الاصطناعي المجاني ---
+# --- محرك الذكاء الاصطناعي المجاني المصحح ---
 
 def get_ai_response(user_message):
     """
-    هذه الدالة ترسل نص المستخدم إلى نماذج ذكاء اصطناعي مجانية
-    وتعيد إجابة ذكية ومحللة.
+    إرسال نص المستخدم إلى نماذج ذكاء اصطناعي مجانية.
+    تم تعديل طريقة استدعاء الموديل لتجنب أخطاء الإصدارات (AttributeError).
     """
     try:
-        # المحاولة عبر مزودين مجانيين متاحين في المكتبة
+        # استخدام string للموديل بدلاً من الكائن المباشر لتجنب أخطاء السجلات
         response = g4f.ChatCompletion.create(
-            model=g4f.models.gpt_35_turbo, # أو g4f.models.gpt_4
+            model="gpt-3.5-turbo", 
             messages=[
                 {"role": "system", "content": "أنت مساعد ذكي ومفيد يدعى VANTOR. أجب على كافة الأسئلة باللغة العربية الفصحى وبأسلوب ذكي ومنطقي."},
                 {"role": "user", "content": user_message}
             ],
         )
         
-        if response:
+        if response and len(response) > 0:
             return response
         else:
             return "عذراً، لم أستطع معالجة الرد حالياً. هل يمكنك المحاولة مرة أخرى؟"
             
     except Exception as e:
         logger.error(f"خطأ في محرك الذكاء الاصطناعي: {e}")
-        return "أواجه ضغطاً في التفكير حالياً، سأكون معك خلال لحظات."
+        # محاولة أخيرة باستخدام موديل افتراضي آخر في حال فشل الأول
+        try:
+            response = g4f.ChatCompletion.create(
+                model=g4f.models.default,
+                messages=[{"role": "user", "content": user_message}],
+            )
+            return response
+        except:
+            return "أواجه ضغطاً في التفكير حالياً، سأكون معك خلال لحظات."
 
 # --- معالجة الرسائل ---
 
@@ -54,7 +62,7 @@ def send_welcome(message):
     """ترحيب ذكي عند بداية التشغيل"""
     welcome_text = (
         "مرحباً بك! أنا VANTOR.\n"
-        "أنا الآن مدعوم بنظام معالجة لغوية ذكي. اسألني أي سؤال وسأحاول إجابتك بأفضل شكل ممكن."
+        "أنا الآن مدعوم بنظام ذكاء اصطناعي متكامل. اسألني أي سؤال وسأجيبك فوراً."
     )
     bot.reply_to(message, welcome_text)
 
@@ -64,12 +72,12 @@ def handle_messages(message):
     chat_id = message.chat.id
     user_text = message.text
 
-    # إظهار حالة "يكتب الآن" في تليجرام لتعزيز شعور الذكاء
+    # إظهار حالة "يكتب الآن" في تليجرام
     bot.send_chat_action(chat_id, 'typing')
     
     logger.info(f"رسالة من {chat_id}: {user_text}")
 
-    # جلب الرد الذكي من المحرك المجاني
+    # جلب الرد الذكي
     final_reply = get_ai_response(user_text)
 
     try:
@@ -79,22 +87,19 @@ def handle_messages(message):
     except Exception as e:
         logger.error(f"فشل إرسال الرسالة: {e}")
 
-# --- آلية التشغيل المستمر في Railway ---
+# --- آلية التشغيل المستمر ---
 
 def start_polling():
     """تشغيل البوت بوضعية الاستقرار لضمان عدم التوقف"""
     while True:
         try:
             logger.info("جاري تشغيل البوت الذكي (VANTOR)...")
-            # حذف الويب هوك لتجنب التعارض
             bot.remove_webhook()
-            # تشغيل البولينج
             bot.polling(none_stop=True, interval=1, timeout=60)
         except Exception as e:
             logger.error(f"خطأ في الاتصال: {e}")
-            # الانتظار قبل إعادة المحاولة
             time.sleep(5)
 
 if __name__ == "__main__":
-    # كتابة الكود كاملاً لضمان التشغيل الصحيح دون أي نقص
+    # تشغيل الكود بالكامل
     start_polling()
