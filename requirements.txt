@@ -1,3 +1,4 @@
 pyTelegramBotAPI
 g4f
 requests
+supabase==2.11.0
