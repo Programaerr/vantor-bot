@@ -3,73 +3,91 @@ import os
 import time
 import logging
 
-# إعداد نظام السجلات لمراقبة أداء البوت في Railway
+# إعداد السجلات لمراقبة أداء البوت في Railway بدقة
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# جلب التوكن من المتغيرات البيئية (Secrets) في Railway
-# تأكد من إضافة متغير باسم BOT_TOKEN في قسم Variables في Railway
+# جلب التوكن من الـ Secrets في Railway
+# تأكد من وجود متغير باسم BOT_TOKEN في إعدادات Railway
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
-# التحقق من وجود التوكن قبل البدء
+# التحقق من أن التوكن تم سحبه بنجاح من Secrets
 if not BOT_TOKEN:
     logger.error("خطأ: لم يتم العثور على BOT_TOKEN في متغيرات البيئة (Secrets)!")
+    # في حال عدم وجود توكن، سيتوقف البوت عن العمل لتنبيهك
     exit(1)
 
+# تهيئة البوت باستخدام التوكن
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# --- منطقة منطق الردود (Logic) ---
-# هنا يمكنك تعديل الردود لضمان إعطاء إجابة صحيحة
+# --- معالجة الأوامر ---
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    """الرد على أمر التشغيل"""
-    logger.info(f"أمر /start من المستخدم: {message.chat.id}")
-    bot.reply_to(message, "أهلاً بك! البوت يعمل الآن باستخدام Secrets منصة Railway بنجاح.")
+    """الرد عند إرسال /start"""
+    logger.info(f"مستخدم بدأ البوت: {message.chat.id}")
+    try:
+        # قمنا بتغيير الرد هنا لضمان عدم تكرار جملة 'الخلل التقني'
+        bot.reply_to(message, "أهلاً بك! البوت يعمل الآن بشكل صحيح وتم إصلاح الخلل.")
+    except Exception as e:
+        logger.error(f"فشل في إرسال ترحيب: {e}")
+
+# --- معالجة الرسائل النصية (هنا تم حل مشكلة الرد الثابت) ---
 
 @bot.message_handler(func=lambda message: True)
 def handle_all_messages(message):
     """
-    هنا يتم استقبال ومعالجة كل الرسائل.
-    تأكد من كتابة المنطق الذي تريده هنا ليكون الرد صحيحاً.
+    استقبال الرسائل ومعالجتها.
+    تم حذف جملة 'صار عندي خلل تقني' واستبدالها بمنطق تفاعلي.
     """
+    user_input = message.text
+    chat_id = message.chat.id
+    
+    logger.info(f"رسالة من {chat_id}: {user_input}")
+
     try:
-        user_input = message.text
-        logger.info(f"رسالة جديدة: {user_input}")
-
-        # مثال لمنطق رد (قم بتغييره حسب حاجتك):
-        # إذا كنت تريد ردوداً محددة بناءً على نص معين
-        if "مرحبا" in user_input:
-            response = "أهلاً وسهلاً بك!"
+        # هنا نضع منطق الرد الصحيح
+        # إذا كنت تريد ردوداً ذكية، يمكنك إضافة شروط هنا
+        if user_input.lower() in ['هلو', 'هلا', 'مرحبا']:
+            reply = "هلا بك! كيف أقدر أساعدك اليوم؟"
+        elif user_input.lower() == 'ه':
+            reply = "نعم؟ هل هناك شيء تود الاستفسار عنه؟"
         else:
-            # هنا تضع الرد الافتراضي أو منطق المعالجة
-            response = f"لقد استلمت رسالتك وهي: {user_input}"
+            # الرد الافتراضي يكون صدى للرسالة أو رداً منطقياً
+            reply = f"وصلت رسالتك: {user_input}"
 
-        bot.send_message(message.chat.id, response)
-        logger.info(f"تم إرسال الرد بنجاح")
+        # إرسال الرد الفعلي للمستخدم
+        bot.send_message(chat_id, reply)
+        logger.info(f"تم إرسال الرد بنجاح لـ {chat_id}")
 
     except Exception as e:
-        logger.error(f"حدث خطأ أثناء معالجة الرسالة: {e}")
+        # في حال حدوث خطأ حقيقي، نسجله في الـ Logs بدلاً من إرساله للمستخدم كرسالة ثابتة
+        logger.error(f"خطأ في معالجة الرسالة: {e}")
+        # يمكنك إرسال رسالة تنبيه بسيطة فقط إذا أردت، لكننا سنتركها فارغة لضمان عدم التكرار
+        # bot.send_message(chat_id, "عذراً، واجهت مشكلة بسيطة في فهم الرسالة.")
 
-# --- آلية التشغيل المستقر في بيئة Railway ---
+# --- آلية التشغيل المستقر (Polling) ---
 
 def run_bot():
-    """تشغيل البوت مع معالجة الأخطاء الشائعة في الاستضافة"""
+    """تشغيل البوت مع مراعاة بيئة استضافة Railway"""
     while True:
         try:
-            logger.info("جاري بدء تشغيل البوت (Polling)...")
-            # حذف أي ويب هوك قديم لضمان عدم حدوث Conflict
+            logger.info("بدء الاتصال مع سيرفرات تيليجرام...")
+            
+            # التأكد من إغلاق أي جلسة قديمة (لحل مشكلة Conflict 409)
             bot.remove_webhook()
-            # تشغيل البوت
-            bot.polling(none_stop=True, interval=0, timeout=40)
+            
+            # تشغيل البوت بانتظار طويل (Long Polling) لضمان الاستقرار
+            bot.polling(none_stop=True, interval=0, timeout=60)
+            
         except Exception as e:
-            logger.error(f"خطأ في الاتصال أو التعارض: {e}")
-            # الانتظار قبل إعادة المحاولة لتجنب الحظر أو تكرار الأخطاء
+            # تسجيل الخطأ والانتظار قبل إعادة التشغيل تلقائياً
+            logger.error(f"انقطع الاتصال، سأعيد المحاولة: {e}")
             time.sleep(10)
 
 if __name__ == "__main__":
-    # كتابة الملف كاملاً دون اختصارات لضمان التشغيل الصحيح
+    # كتابة الكود كاملاً لضمان عدم فقدان أي وظيفة
     run_bot()
