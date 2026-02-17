@@ -4,35 +4,36 @@ import time
 import logging
 import g4f
 
-# إعداد السجلات لمراقبة أداء البوت في Railway
+# إعداد السجلات لمراقبة الأداء
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# جلب توكن التليجرام من الـ Secrets في Railway
+# جلب توكن التليجرام من المتغيرات البيئية
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
 
 if not BOT_TOKEN:
-    logger.error("خطأ: لم يتم العثور على BOT_TOKEN في المتغيرات السرية!")
+    logger.error("خطأ: لم يتم العثور على BOT_TOKEN!")
     exit(1)
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# --- محرك الذكاء الاصطناعي بالشخصية العراقية ---
+# --- محرك الذكاء الاصطناعي بلهجة عراقية واقعية ---
 
 def get_ai_response(user_message):
     """
-    جلب رد ذكي باللهجة العراقية الكاملة باستخدام g4f.
+    جلب رد ذكي بلهجة عراقية طبيعية بعيدة عن التكلف أو الأخطاء اللغوية.
     """
     try:
-        # صياغة التعليمات لجعل الرد عراقي 100%
+        # تعليمات دقيقة لضبط اللهجة والسياق
         system_instruction = (
             "أنت مساعد ذكي واسمك VANTOR. أريدك أن تتحدث اللهجة العراقية العامية "
-            "بشكل كامل وطبيعي جداً. استخدم كلمات مثل (هلو، عيني، اغاتي، شلونه، شكو ماكو، تدلل، "
-            "خادم ربك، صار، من عيوني). "
-            "أجب على كل الأسئلة بذكاء ومنطق لكن بلسان عراقي فصيح ومحبب."
+            "بأسلوب طبيعي وواقعي جداً، كأنك شخص عراقي مثقف وابن بلد. "
+            "ابتعد عن رص الكلمات بشكل غبي. استخدم عبارات مثل: (هلا بيك، حي الله أصلك، "
+            "شلون أقدر أساعدك، من عيوني، تدلل، عيوني لك، شكو ماكو بالأخبار). "
+            "إذا سلم المستخدم، رد عليه بترحيب حار ومؤدب، وإذا سأل جاوبه بذكاء وبنفس اللهجة."
         )
 
         response = g4f.ChatCompletion.create(
@@ -46,58 +47,56 @@ def get_ai_response(user_message):
         if response and len(str(response)) > 0:
             return response
         else:
-            return "والله يا غالي صار عندي فصل بالدماغ، تعيد سؤالك فدوة لعينك؟"
+            return "والله يا غالي النت شوية تعبان عندي، تقدر تعيد سؤالك؟"
             
     except Exception as e:
         logger.error(f"AI Error: {e}")
-        return "آسف عيوني، صار عندي لود بالشبكة. ثواني وارجعلك!"
+        return "صار عندي خلل بسيط بالشبكة، ثواني وأرجع أجاوبك من عيوني."
 
 # --- معالجة الرسائل ---
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    """ترحيب عراقي حار"""
+    """ترحيب عراقي طبيعي"""
     welcome_text = (
-        "هلو عيني! أهلاً وسهلاً بيك. "
-        "أنا VANTOR، وبخدمتك بأي وقت. اسألني شكو ببالك وتدلل!"
+        "هلا بيك عيني! نورتني. "
+        "أنا VANTOR، أخوك وبخدمتك. شمحتاج أو شكو ببالك سؤال؟ أنا حاضر."
     )
     bot.reply_to(message, welcome_text)
 
 @bot.message_handler(func=lambda message: True)
 def handle_messages(message):
-    """استلام الرسائل والرد عليها بالعراقي"""
+    """استلام الرسائل والرد عليها بذكاء ولهجة حقيقية"""
     chat_id = message.chat.id
     user_text = message.text
 
-    # إظهار حالة "typing" لتعزيز التفاعل
+    # إظهار حالة الكتابة
     bot.send_chat_action(chat_id, 'typing')
     
     logger.info(f"رسالة من {chat_id}: {user_text}")
 
-    # جلب الرد الذكي العراقي
+    # جلب الرد الذكي
     final_reply = get_ai_response(user_text)
 
     try:
         bot.send_message(chat_id, final_reply)
-        logger.info(f"تم الرد باللهجة العراقية على {chat_id}")
+        logger.info(f"تم الرد بلهجة عراقية صحيحة على {chat_id}")
     except Exception as e:
         logger.error(f"فشل إرسال الرسالة: {e}")
 
-# --- آلية التشغيل ومنع التعارض المستقر ---
+# --- آلية التشغيل المستقر ---
 
 def start_bot():
     """تشغيل البوت مع ضمان استقرار الجلسة"""
     while True:
         try:
-            logger.info("جاري تشغيل VANTOR العراقي...")
+            logger.info("جاري تشغيل VANTOR بلهجة عراقية معدلة...")
             bot.remove_webhook()
-            # تقليل الفاصل الزمني قليلاً لسرعة الرد
             bot.polling(none_stop=True, interval=1, timeout=60)
         except Exception as e:
             logger.error(f"حدث خطأ: {e}")
-            # إذا كان هناك تعارض، ننتظر قليلاً قبل إعادة التشغيل
             time.sleep(10)
 
 if __name__ == "__main__":
-    # تشغيل الملف بالكامل بدون اختصار
+    # كتابة الملف كاملاً لضمان عدم حدوث نقص
     start_bot()
