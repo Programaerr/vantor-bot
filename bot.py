@@ -29,9 +29,9 @@ except Exception as e:
 user_states = {}
 
 def get_ai_response(prompt):
-    """وظيفة لاستخدام g4f للرد على الرسائل العامة بطريقة مرنة"""
+    """وظيفة لاستخدام g4f للرد على الرسائل العامة بطريقة مرنة لتجنب أخطاء الاستيراد"""
     try:
-        # استخدام g4f بدون استيراد المزودين لتجنب أخطاء ImportError
+        # نستخدم الكود المباشر دون استيراد Providers لتفادي ImportError
         response = g4f.ChatCompletion.create(
             model=g4f.models.default,
             messages=[
@@ -51,7 +51,7 @@ def send_welcome(message):
     user_id = message.chat.id
     user_states[user_id] = None # إعادة ضبط الحالة
     welcome_text = (
-        f"أهلاً بك أستاذ {message.from_user.first_name} في نظام VANTOR.\n"
+        f"أهلاً بك أستاذ {message.from_user.first_name} في نظام VANTOR المحدث.\n"
         "يمكنك الاستفسار عن حالة طلبك بإرسال كلمة 'تتبع' أو 'طلب' أو أي سؤال آخر."
     )
     bot.send_message(user_id, welcome_text)
@@ -61,7 +61,7 @@ def handle_all_messages(message):
     user_id = message.chat.id
     text = message.text.strip().lower()
 
-    # كلمات التحية
+    # كلمات التحية والردود السريعة
     greetings = ['سلام', 'هلا', 'مرحبا', 'السلام', 'شلونك', 'صباح', 'مساء', 'هلو', 'الو']
 
     # 1. إذا كان البوت ينتظر رقم طلب
@@ -94,12 +94,12 @@ def handle_all_messages(message):
     bot.send_message(user_id, ai_reply)
 
 def process_order_tracking(message, order_id):
-    """البحث في قاعدة بيانات Supabase مع تجربة أكثر من عمود"""
+    """البحث في قاعدة بيانات Supabase مع تجربة عدة أعمدة محتملة"""
     user_id = message.chat.id
     bot.send_message(user_id, f"جاري البحث عن الطلب رقم (#{order_id})...")
     
     found = False
-    # قائمة بالأعمدة المحتملة لرقم الطلب في جدولك
+    # تجربة الأسماء الشائعة للأعمدة لضمان عدم حدوث خطأ
     potential_columns = ['id', 'order_number', 'order_id']
     
     for col in potential_columns:
@@ -118,18 +118,20 @@ def process_order_tracking(message, order_id):
         bot.send_message(user_id, f"عذراً، لم أجد طلباً مسجلاً بالرقم (#{order_id}). تأكد من الرقم مرة أخرى.")
 
 if __name__ == '__main__':
-    logger.info("البوت يعمل الآن بنظام VANTOR...")
+    logger.info("جاري بدء تشغيل بوت VANTOR...")
     
-    # حل مشكلة الـ Conflict وحذف الويب هوك
+    # حل مشكلة الـ Conflict 409 وحذف أي ويب هوك قديم
     try:
         bot.remove_webhook()
-    except:
-        pass
+        logger.info("تم تنظيف جلسات الاتصال القديمة.")
+    except Exception as e:
+        logger.warning(f"فشل حذف الويب هوك (قد لا يكون موجوداً أصلاً): {e}")
         
-    # حلقة تشغيل دائمة لمعالجة أخطاء الاتصال
+    # حلقة تشغيل دائمة لضمان عدم توقف البوت عند حدوث أخطاء شبكة
     while True:
         try:
-            bot.infinity_polling(skip_pending=True, timeout=60)
+            logger.info("البوت بدأ باستقبال الرسائل...")
+            bot.infinity_polling(skip_pending=True, timeout=60, long_polling_timeout=60)
         except Exception as e:
             logger.error(f"Polling Error: {e}")
-            time.sleep(5)
+            time.sleep(10) # انتظار قليلاً قبل إعادة المحاولة
