@@ -1,67 +1,20 @@
+# bot.py
 import os
-import re
-import logging
 import telebot
-from supabase import create_client, Client
-import g4f
-import requests
-import time
+from core import handle_vantor_logic
 
-# استيراد الإعدادات من الملف الجديد
-from config import SYSTEM_PROMPT, STATUS_MAP
-
-# إعداد السجلات
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-# بيانات الاعتماد
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-
-bot = telebot.TeleBot(TOKEN, threaded=False)
-
-try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    logger.info("تم الاتصال بـ Supabase بنجاح.")
-except Exception as e:
-    logger.error(f"خطأ في الاتصال بـ Supabase: {e}")
-
-user_data = {}
-
-def get_ai_response(prompt, user_id):
-    """جلب الرد باستخدام البرومبت الصارم من config.py"""
-    try:
-        response = g4f.ChatCompletion.create(
-            model=g4f.models.default,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-        )
-        if response and len(str(response)) > 0:
-            return response
-        return "يا هلا بيك عيني بـ VANTOR للملابس، بشنو أكدر أخدمك اليوم؟"
-    except Exception as e:
-        logger.error(f"AI Error: {e}")
-        return "أهلاً بيك غالي، شلون أكدر أساعدك بخصوص قطع الملابس اللي طلبتها؟"
-
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    user_id = message.chat.id
-    user_data[user_id] = {'state': None, 'last_order_id': None}
-    welcome_text = (
-        f"يا هلا ومية هلا بيك أستاذ {message.from_user.first_name} في براند VANTOR للملابس.\n\n"
-        "أنا مساعدك الذكي، تكدر تتبع طلبك (أرسل رقم الطلب) "
-        "أو استفسر عن أي شي بخصوص موديلاتنا وأنا حاضر عيوني."
-    )
-    bot.send_message(user_id, welcome_text)
+bot = telebot.TeleBot(TOKEN)
 
 @bot.message_handler(func=lambda message: True)
-def handle_all_messages(message):
-    user_id = message.chat.id
-    text = message.text.strip()
-    
+def main_handler(message):
+    # البوت يروح للـ core والـ core يروح للـ JSON
+    reply = handle_vantor_logic(message.text, message.chat.id)
+    bot.reply_to(message, reply)
+
+if __name__ == '__main__':
+    print("VANTOR Bot is running and reading from JSON...")
+    bot.infinity_polling()
     if user_id not in user_data:
         user_data[user_id] = {'state': None, 'last_order_id': None}
 
