@@ -1,39 +1,36 @@
 # bot.py
 import os
 import telebot
+import time
+import logging
 from core import handle_vantor_logic
 
+logging.basicConfig(level=logging.INFO)
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-bot = telebot.TeleBot(TOKEN)
+bot = telebot.TeleBot(TOKEN, threaded=False)
+
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    welcome_text = (
+        f"يا هلا ومية هلا بيك أستاذ {message.from_user.first_name} في براند VANTOR للملابس.\n\n"
+        "أنا مساعدك الذكي، دزلي رقم طلبك أو استفسر عن أي موديل وأنا حاضر عيوني."
+    )
+    bot.send_message(message.chat.id, welcome_text)
 
 @bot.message_handler(func=lambda message: True)
 def main_handler(message):
-    # البوت يروح للـ core والـ core يروح للـ JSON
-    reply = handle_vantor_logic(message.text, message.chat.id)
-    bot.reply_to(message, reply)
+    try:
+        reply = handle_vantor_logic(message.text, message.chat.id)
+        bot.reply_to(message, reply)
+    except Exception as e:
+        logging.error(f"Error: {e}")
 
 if __name__ == '__main__':
-    print("VANTOR Bot is running and reading from JSON...")
-    bot.infinity_polling()
-    if user_id not in user_data:
-        user_data[user_id] = {'state': None, 'last_order_id': None}
-
-    # التحقق من وجود رقم في الرسالة (أولوية تتبع الطلب)
-    order_id_match = re.search(r'\d+', text)
-    
-    # كلمات إعادة البحث
-    re_check_keywords = ['متأكد', 'صح', 'مرة ثانية', 'عيد البحث', 'شصار بطلبي']
-    if any(word in text for word in re_check_keywords) and user_data[user_id]['last_order_id']:
-        process_order_tracking(message, user_data[user_id]['last_order_id'])
-        return
-
-    # إذا أرسل رقم طلب مباشرة
-    if order_id_match and (len(order_id_match.group()) >= 4 or text.startswith('#')):
-        order_id = order_id_match.group()
-        user_data[user_id]['last_order_id'] = order_id
-        process_order_tracking(message, order_id)
-        return
-
+    # حل مشكلة الـ Conflict بتنظيف الـ Webhook
+    bot.remove_webhook()
+    time.sleep(1)
+    print("VANTOR Bot is running...")
+    bot.infinity_polling(skip_pending=True)
     # الكشف عن نية التتبع
     tracking_keywords = ['تتبع', 'وين وصل', 'طلبي', 'حالة الطلب', 'شوكت يوصل']
     if any(word in text.lower() for word in tracking_keywords):
